@@ -30,6 +30,9 @@ export const metadata: Metadata = {
     "16-bit",
     "44.1kHz",
   ],
+  icons: {
+    icon: "/images/logo.png",
+  },
   openGraph: {
     title: "FlacDrop — Genuine CD-Quality Music Downloads",
     description:
@@ -103,7 +106,7 @@ export default function RootLayout({
         <header className="site-header">
           <div className="site-header__inner">
             <a href="/" className="site-header__logo">
-              <span className="site-header__logo-dot" aria-hidden="true" />
+              <img src="/images/logo.png" alt="FlacDrop Logo" width={32} height={32} style={{ borderRadius: '50%' }} className="site-header__logo-img" />
               FlacDrop
             </a>
             <nav className="site-nav" aria-label="Main navigation">
