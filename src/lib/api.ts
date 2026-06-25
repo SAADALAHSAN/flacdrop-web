@@ -49,7 +49,14 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
       );
     }
 
-    return res.json() as Promise<T>;
+    const data = await res.json().catch(() => {
+      throw new ApiError(
+        `Invalid response from ${path}: expected JSON but received unparseable body`,
+        res.status,
+      );
+    });
+
+    return data as T;
   } catch (err) {
     if (err instanceof ApiError) throw err;
 

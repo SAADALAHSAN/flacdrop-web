@@ -299,6 +299,7 @@ interface InlineDownloadButtonProps {
   downloadState: DownloadState;
   downloadProgress: number;
   downloadEta: string;
+  errorMessage?: string;
   onDownload: (trackId: string, title: string, artist: string) => void;
 }
 
@@ -309,6 +310,7 @@ function InlineDownloadButton({
   downloadState,
   downloadProgress,
   downloadEta,
+  errorMessage,
   onDownload,
 }: InlineDownloadButtonProps) {
   const [hovered, setHovered] = useState(false);
@@ -392,17 +394,32 @@ function InlineDownloadButton({
       )}
 
       {downloadState === 'error' && (
-        <button
-          type="button"
-          onClick={() => onDownload(trackId, trackTitle, trackArtist)}
-          style={{
-            ...inlineStyles.downloadBtn,
-            borderColor: 'var(--danger, #FF4757)',
-            color: 'var(--danger, #FF4757)',
-          }}
-        >
-          ✗ Failed — Retry
-        </button>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '2px' }}>
+          <button
+            type="button"
+            onClick={() => onDownload(trackId, trackTitle, trackArtist)}
+            style={{
+              ...inlineStyles.downloadBtn,
+              borderColor: 'var(--danger, #FF4757)',
+              color: 'var(--danger, #FF4757)',
+            }}
+          >
+            ✗ Failed — Retry
+          </button>
+          {errorMessage && (
+            <span style={{
+              fontFamily: "'IBM Plex Mono', monospace",
+              fontSize: '10px',
+              color: 'var(--danger, #FF4757)',
+              maxWidth: '160px',
+              textAlign: 'right',
+              lineHeight: 1.2,
+              opacity: 0.8,
+            }}>
+              {errorMessage}
+            </span>
+          )}
+        </div>
       )}
     </div>
   );
@@ -423,6 +440,7 @@ export default function AlbumModal({ albumId, isOpen, onClose }: AlbumModalProps
 
   const [albumDownloadState, setAlbumDownloadState] = useState<'idle' | 'downloading' | 'complete'>('idle');
   const [albumDownloadProgressText, setAlbumDownloadProgressText] = useState('');
+  const [trackErrors, setTrackErrors] = useState<Record<string, string>>({});
 
   // Fetch album tracklist
   useEffect(() => {
@@ -442,11 +460,17 @@ export default function AlbumModal({ albumId, isOpen, onClose }: AlbumModalProps
         if (!res.ok) {
           throw new Error(`Failed to load album tracks (HTTP ${res.status})`);
         }
-        const data = await res.json();
+        let data;
+        try {
+          data = await res.json();
+        } catch {
+          throw new Error('Server returned an invalid response for this album.');
+        }
         setAlbum(data);
-      } catch (err: any) {
-        console.error(err);
-        setError(err.message || 'Could not connect to server.');
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : 'Could not connect to server.';
+        console.error('Album fetch error:', err);
+        setError(message);
       } finally {
         setLoading(false);
       }
@@ -461,6 +485,7 @@ export default function AlbumModal({ albumId, isOpen, onClose }: AlbumModalProps
       setDownloadStates({});
       setDownloadProgress({});
       setDownloadEtas({});
+      setTrackErrors({});
       setAlbumDownloadState('idle');
       setAlbumDownloadProgressText('');
     }
@@ -520,11 +545,25 @@ export default function AlbumModal({ albumId, isOpen, onClose }: AlbumModalProps
 
       if (prepTimeoutId) clearTimeout(prepTimeoutId);
 
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      if (!response.ok) {
+        let detail = `Server returned ${response.status}`;
+        try {
+          const errBody = await response.json();
+          detail = errBody.detail || errBody.message || detail;
+        } catch {
+          // response body wasn't JSON, keep the HTTP status message
+        }
+        throw new Error(detail);
+      }
 
       const contentType = response.headers.get('content-type') || '';
       if (contentType.includes('application/json')) {
-        const errData = await response.json();
+        let errData;
+        try {
+          errData = await response.json();
+        } catch {
+          throw new Error('Server returned an unreadable error response.');
+        }
         throw new Error(errData.detail || errData.message || 'Download failed');
       }
 
@@ -582,11 +621,13 @@ export default function AlbumModal({ albumId, isOpen, onClose }: AlbumModalProps
 
       setDownloadStates(prev => ({ ...prev, [trackId]: 'complete' }));
       return true;
-    } catch (err: any) {
+    } catch (err: unknown) {
       if (prepTimeoutId) clearTimeout(prepTimeoutId);
+      const message = err instanceof Error ? err.message : 'An unexpected error occurred.';
       console.error('Download error:', err);
       setDownloadStates(prev => ({ ...prev, [trackId]: 'error' }));
-      setDownloadEtas(prev => ({ ...prev, [trackId]: 'failed' }));
+      setDownloadEtas(prev => ({ ...prev, [trackId]: '' }));
+      setTrackErrors(prev => ({ ...prev, [trackId]: message }));
       return false;
     }
   }, []);
@@ -616,16 +657,16 @@ export default function AlbumModal({ albumId, isOpen, onClose }: AlbumModalProps
       if (success) {
         completedCount++;
       } else {
-        // If one fails, we continue but warn
-        console.warn(`Album download: Track ${track.title} failed.`);
+        // Track failure is already surfaced via per-track error state
       }
     }
 
-    setAlbumDownloadState(completedCount === totalTracks ? 'complete' : 'idle');
+    const allSucceeded = completedCount === totalTracks;
+    setAlbumDownloadState(allSucceeded ? 'complete' : 'idle');
     setAlbumDownloadProgressText(
-      completedCount === totalTracks 
+      allSucceeded
         ? 'All Tracks Downloaded!' 
-        : `Downloaded ${completedCount} of ${totalTracks} tracks`
+        : `${completedCount} of ${totalTracks} downloaded — ${totalTracks - completedCount} failed`
     );
   };
 
@@ -755,6 +796,7 @@ export default function AlbumModal({ albumId, isOpen, onClose }: AlbumModalProps
                         downloadState={downloadStates[track.id] || 'idle'}
                         downloadProgress={downloadProgress[track.id] || 0}
                         downloadEta={downloadEtas[track.id] || ''}
+                        errorMessage={trackErrors[track.id]}
                         onDownload={handleTrackDownload}
                       />
                     </div>

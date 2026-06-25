@@ -64,6 +64,7 @@ function ResultsContent() {
   const [downloadStates, setDownloadStates] = useState<Record<string, DownloadState>>({});
   const [downloadProgress, setDownloadProgress] = useState<Record<string, number>>({});
   const [downloadEtas, setDownloadEtas] = useState<Record<string, string>>({});
+  const [downloadErrors, setDownloadErrors] = useState<Record<string, string>>({});
 
   const handleSearch = ({ query: q, isYouTube }: { query: string; isYouTube: boolean }) => {
     const params = new URLSearchParams();
@@ -94,7 +95,12 @@ function ResultsContent() {
       if (!response.ok) {
         throw new Error(`Failed to fetch results from server (HTTP ${response.status})`);
       }
-      const data = await response.json();
+      let data;
+      try {
+        data = await response.json();
+      } catch {
+        throw new Error('Server returned an invalid response. Please try again.');
+      }
       setTracks(data.tracks || []);
       setAlbums(data.albums || []);
       
@@ -102,9 +108,10 @@ function ResultsContent() {
         setYoutubeDetected(data.youtube_detected);
         setActiveTab('tracks'); // YouTube always resolves to single track
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Could not connect to the backend server. Please verify it is running.';
       console.error('Search error:', err);
-      setError(err.message || 'Could not connect to the backend server. Please verify it is running.');
+      setError(message);
       setTracks([]);
       setAlbums([]);
     } finally {
@@ -195,7 +202,12 @@ function ResultsContent() {
       // Check if response is JSON (like queue full or other backend API issue)
       const contentType = response.headers.get('content-type') || '';
       if (contentType.includes('application/json')) {
-        const errData = await response.json();
+        let errData;
+        try {
+          errData = await response.json();
+        } catch {
+          throw new Error('Server returned an unreadable error response.');
+        }
         throw new Error(errData.detail || errData.message || 'Download failed');
       }
 
@@ -269,13 +281,15 @@ function ResultsContent() {
       window.URL.revokeObjectURL(downloadUrl);
 
       setDownloadStates(prev => ({ ...prev, [trackId]: 'complete' }));
-    } catch (err: any) {
+    } catch (err: unknown) {
       if (prepTimeoutId) {
         clearTimeout(prepTimeoutId);
       }
+      const message = err instanceof Error ? err.message : 'An unexpected error occurred.';
       console.error('Download error:', err);
       setDownloadStates(prev => ({ ...prev, [trackId]: 'error' }));
-      setDownloadEtas(prev => ({ ...prev, [trackId]: 'failed' }));
+      setDownloadEtas(prev => ({ ...prev, [trackId]: '' }));
+      setDownloadErrors(prev => ({ ...prev, [trackId]: message }));
     }
   }, []);
 
@@ -542,6 +556,7 @@ function ResultsContent() {
                 downloadProgress={downloadProgress[track.id] || 0}
                 downloadEta={downloadEtas[track.id] || ''}
                 onDownload={() => handleDownload(track.id, track.title, track.artist)}
+                errorMessage={downloadErrors[track.id]}
               />
             ))}
           </div>
