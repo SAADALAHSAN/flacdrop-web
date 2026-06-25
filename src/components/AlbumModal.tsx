@@ -1,6 +1,9 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
+import { API_BASE } from '@/lib/api';
+import { downloadTrack } from '@/lib/download';
+import type { DownloadState } from '@/lib/types';
 
 interface Track {
   id: string;
@@ -32,8 +35,6 @@ interface AlbumModalProps {
   isOpen: boolean;
   onClose: () => void;
 }
-
-type DownloadState = 'idle' | 'queued' | 'downloading' | 'complete' | 'error';
 
 const styles = {
   overlay: {
@@ -435,7 +436,6 @@ export default function AlbumModal({ albumId, isOpen, onClose }: AlbumModalProps
     const fetchAlbum = async () => {
       setLoading(true);
       setError(null);
-      const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
       try {
         const res = await fetch(`${API_BASE}/api/album/${albumId}`);
@@ -466,129 +466,12 @@ export default function AlbumModal({ albumId, isOpen, onClose }: AlbumModalProps
     }
   }, [isOpen]);
 
-  // Single track downloader
   const handleTrackDownload = useCallback(async (trackId: string, trackTitle: string, trackArtist: string): Promise<boolean> => {
-    const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-
-    setDownloadStates(prev => ({ ...prev, [trackId]: 'queued' }));
-    setDownloadProgress(prev => ({ ...prev, [trackId]: 0 }));
-    setDownloadEtas(prev => ({ ...prev, [trackId]: '' }));
-
-    let prepProgress = 0;
-    let prepTimeoutId: NodeJS.Timeout | null = null;
-
-    const runPrepAnimation = () => {
-      let delay = 120;
-      let step = 0;
-
-      if (prepProgress < 50) {
-        step = Math.round(Math.random() * 8 + 6);
-        delay = 120;
-      } else if (prepProgress < 80) {
-        step = Math.round(Math.random() * 4 + 2);
-        delay = 250;
-      } else if (prepProgress < 94) {
-        step = Math.round(Math.random() * 2 + 1);
-        delay = 600;
-      } else if (prepProgress < 98) {
-        step = 1;
-        delay = 1500;
-      }
-
-      prepProgress += step;
-      if (prepProgress > 98) prepProgress = 98;
-
-      let prepEta = '';
-      if (prepProgress < 40) prepEta = '~4s left';
-      else if (prepProgress < 70) prepEta = '~3s left';
-      else if (prepProgress < 90) prepEta = '~2s left';
-      else if (prepProgress < 95) prepEta = '~1s left';
-      else prepEta = 'almost ready...';
-
-      setDownloadProgress(prev => ({ ...prev, [trackId]: prepProgress }));
-      setDownloadEtas(prev => ({ ...prev, [trackId]: prepEta }));
-
-      if (prepProgress < 98) {
-        prepTimeoutId = setTimeout(runPrepAnimation, delay);
-      }
-    };
-
-    runPrepAnimation();
-
-    try {
-      const response = await fetch(`${API_BASE}/api/download/${trackId}`);
-
-      if (prepTimeoutId) clearTimeout(prepTimeoutId);
-
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-
-      const contentType = response.headers.get('content-type') || '';
-      if (contentType.includes('application/json')) {
-        const errData = await response.json();
-        throw new Error(errData.detail || errData.message || 'Download failed');
-      }
-
-      const contentLengthHeader = response.headers.get('content-length');
-      const contentLength = contentLengthHeader ? parseInt(contentLengthHeader, 10) : 0;
-
-      setDownloadStates(prev => ({ ...prev, [trackId]: 'downloading' }));
-      setDownloadProgress(prev => ({ ...prev, [trackId]: 0 }));
-      setDownloadEtas(prev => ({ ...prev, [trackId]: '' }));
-
-      const reader = response.body?.getReader();
-      if (!reader) throw new Error('No body reader');
-
-      let receivedLength = 0;
-      const chunks: any[] = [];
-      const downloadStartTime = Date.now();
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        chunks.push(value);
-        receivedLength += value.length;
-
-        if (contentLength > 0) {
-          const progress = Math.round((receivedLength / contentLength) * 100);
-          setDownloadProgress(prev => ({ ...prev, [trackId]: Math.min(progress, 99) }));
-
-          const elapsed = (Date.now() - downloadStartTime) / 1000;
-          if (elapsed > 0.2) {
-            const speed = receivedLength / elapsed;
-            const remaining = speed > 0 ? Math.round((contentLength - receivedLength) / speed) : 0;
-            setDownloadEtas(prev => ({ ...prev, [trackId]: `${remaining}s left` }));
-          }
-        }
-      }
-
-      setDownloadProgress(prev => ({ ...prev, [trackId]: 100 }));
-      setDownloadEtas(prev => ({ ...prev, [trackId]: '' }));
-
-      const blob = new Blob(chunks, { type: 'audio/flac' });
-      const downloadUrl = window.URL.createObjectURL(blob);
-
-      const safeTitle = trackTitle.replace(/[^a-zA-Z0-9 -_]/g, '').trim();
-      const safeArtist = trackArtist.replace(/[^a-zA-Z0-9 -_]/g, '').trim();
-      const filename = `${safeArtist} - ${safeTitle}.flac`;
-
-      const link = document.createElement('a');
-      link.href = downloadUrl;
-      link.download = filename;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      window.URL.revokeObjectURL(downloadUrl);
-
-      setDownloadStates(prev => ({ ...prev, [trackId]: 'complete' }));
-      return true;
-    } catch (err: any) {
-      if (prepTimeoutId) clearTimeout(prepTimeoutId);
-      console.error('Download error:', err);
-      setDownloadStates(prev => ({ ...prev, [trackId]: 'error' }));
-      setDownloadEtas(prev => ({ ...prev, [trackId]: 'failed' }));
-      return false;
-    }
+    return downloadTrack(trackId, trackTitle, trackArtist, {
+      setDownloadStates,
+      setDownloadProgress,
+      setDownloadEtas,
+    });
   }, []);
 
   // Sequential Album Downloader Loop

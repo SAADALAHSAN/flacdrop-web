@@ -5,15 +5,13 @@ import WaveformHero from '@/components/WaveformHero';
 import SearchBar from '@/components/SearchBar';
 import GearSection from '@/components/GearSection';
 import DonateWidget from '@/components/DonateWidget';
+import { navigateToSearch } from '@/lib/navigation';
 
 export default function Home() {
   const router = useRouter();
 
-  const handleSearch = ({ query, isYouTube }: { query: string; isYouTube: boolean }) => {
-    const params = new URLSearchParams();
-    params.set('q', query);
-    if (isYouTube) params.set('yt', '1');
-    router.push(`/results?${params.toString()}`);
+  const handleSearch = (result: { query: string; isYouTube: boolean }) => {
+    navigateToSearch(router, result);
   };
 
   return (

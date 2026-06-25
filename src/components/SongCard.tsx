@@ -1,8 +1,8 @@
 'use client';
 
 import { useState } from 'react';
-
-type DownloadState = 'idle' | 'queued' | 'downloading' | 'complete' | 'error';
+import { cardStyles, coverArtPlaceholderStyle } from '@/lib/cardStyles';
+import type { DownloadState } from '@/lib/types';
 
 interface SongCardProps {
   title: string;
@@ -25,131 +25,18 @@ function formatDuration(seconds: number): string {
 }
 
 const styles = {
-  card: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '20px',
-    padding: '20px',
-    background: 'var(--surface, #111113)',
-    borderWidth: '1px',
-    borderStyle: 'solid',
-    borderColor: 'var(--border, #222226)',
-    borderRadius: '12px',
-    transition: 'transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease',
-    cursor: 'default',
-    width: '100%',
-    maxWidth: '720px',
-  },
-  cardHover: {
-    transform: 'translateY(-2px)',
-    boxShadow: '0 8px 32px rgba(0, 0, 0, 0.3)',
-    borderColor: 'var(--border-hover, #333)',
-  },
-  albumArt: {
-    width: '120px',
-    height: '120px',
-    borderRadius: '8px',
-    objectFit: 'cover' as const,
-    flexShrink: 0,
-    background: '#1a1a1e',
-  },
-  albumArtPlaceholder: {
-    width: '120px',
-    height: '120px',
-    borderRadius: '8px',
-    flexShrink: 0,
-    background: 'linear-gradient(135deg, #1a1a1e, #222226)',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    color: 'var(--text-muted, #555)',
-    fontSize: '32px',
-  },
-  meta: {
-    flex: 1,
-    minWidth: 0,
-    display: 'flex',
-    flexDirection: 'column' as const,
-    gap: '6px',
-  },
-  title: {
-    fontFamily: "'Space Grotesk', sans-serif",
-    fontSize: '18px',
-    fontWeight: 600,
-    color: 'var(--text-primary, #F0F0F0)',
-    lineHeight: 1.3,
-    margin: 0,
-    overflow: 'hidden' as const,
-    textOverflow: 'ellipsis' as const,
-    whiteSpace: 'nowrap' as const,
-  },
-  subtitle: {
-    fontFamily: "'IBM Plex Mono', monospace",
-    fontSize: '13px',
-    color: 'var(--text-muted, #888)',
-    lineHeight: 1.4,
-    margin: 0,
-    overflow: 'hidden' as const,
-    textOverflow: 'ellipsis' as const,
-    whiteSpace: 'nowrap' as const,
-  },
-  row: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '12px',
-    marginTop: '8px',
-    flexWrap: 'wrap' as const,
-  },
-  qualityBadge: {
-    display: 'inline-flex',
-    alignItems: 'center',
-    padding: '4px 12px',
-    borderRadius: '100px',
-    borderWidth: '1px',
-    borderStyle: 'solid',
-    borderColor: 'var(--accent, #00E5CC)',
-    color: 'var(--accent, #00E5CC)',
-    fontSize: '11px',
-    fontFamily: "'IBM Plex Mono', monospace",
-    fontWeight: 500,
-    letterSpacing: '0.5px',
-    whiteSpace: 'nowrap' as const,
-  },
-  duration: {
-    fontFamily: "'IBM Plex Mono', monospace",
-    fontSize: '13px',
-    color: 'var(--text-muted, #888)',
-  },
-  actions: {
-    display: 'flex',
-    flexDirection: 'column' as const,
-    alignItems: 'flex-end',
-    flexShrink: 0,
-    gap: '8px',
-  },
-  downloadBtn: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '8px',
-    padding: '10px 20px',
-    borderRadius: '8px',
-    borderWidth: '1px',
-    borderStyle: 'solid',
-    borderColor: 'var(--accent, #00E5CC)',
-    background: 'transparent',
-    color: 'var(--accent, #00E5CC)',
-    fontFamily: "'Space Grotesk', sans-serif",
-    fontWeight: 600,
-    fontSize: '14px',
-    cursor: 'pointer',
-    transition: 'all 0.2s ease',
-    whiteSpace: 'nowrap' as const,
-  },
-  downloadBtnHover: {
-    background: 'var(--accent, #00E5CC)',
-    color: '#0A0A0C',
-    boxShadow: '0 0 20px rgba(0, 229, 204, 0.3)',
-  },
+  card: cardStyles.card,
+  cardHover: cardStyles.cardHover,
+  albumArt: { ...cardStyles.coverArt, boxShadow: undefined },
+  meta: cardStyles.meta,
+  title: cardStyles.title,
+  subtitle: cardStyles.subtitle,
+  row: cardStyles.badgeRow,
+  qualityBadge: cardStyles.accentBadge,
+  duration: cardStyles.mutedText,
+  actions: cardStyles.actions,
+  downloadBtn: cardStyles.actionBtn,
+  downloadBtnHover: cardStyles.actionBtnHover,
 };
 
 export default function SongCard({
@@ -184,13 +71,7 @@ export default function SongCard({
           loading="lazy"
         />
       ) : (
-        <div style={{
-          ...styles.albumArtPlaceholder,
-          background: color
-            ? `linear-gradient(135deg, ${color}33, ${color}11)`
-            : styles.albumArtPlaceholder.background,
-          color: color || 'var(--text-muted, #555)',
-        }} aria-hidden="true">
+        <div style={coverArtPlaceholderStyle(color)} aria-hidden="true">
           ♪
         </div>
       )}
