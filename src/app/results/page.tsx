@@ -103,7 +103,6 @@ function ResultsContent() {
         setActiveTab('tracks'); // YouTube always resolves to single track
       }
     } catch (err: any) {
-      console.error('Search error:', err);
       setError(err.message || 'Could not connect to the backend server. Please verify it is running.');
       setTracks([]);
       setAlbums([]);
@@ -269,11 +268,10 @@ function ResultsContent() {
       window.URL.revokeObjectURL(downloadUrl);
 
       setDownloadStates(prev => ({ ...prev, [trackId]: 'complete' }));
-    } catch (err: any) {
+    } catch {
       if (prepTimeoutId) {
         clearTimeout(prepTimeoutId);
       }
-      console.error('Download error:', err);
       setDownloadStates(prev => ({ ...prev, [trackId]: 'error' }));
       setDownloadEtas(prev => ({ ...prev, [trackId]: 'failed' }));
     }

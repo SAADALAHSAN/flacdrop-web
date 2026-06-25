@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { Space_Grotesk, IBM_Plex_Mono } from "next/font/google";
-import Script from "next/script";
+import BisCleanup from "@/components/BisCleanup";
 import "./globals.css";
 
 const spaceGrotesk = Space_Grotesk({
@@ -64,44 +64,7 @@ export default function RootLayout({
       className={`${spaceGrotesk.variable} ${ibmPlexMono.variable}`}
       suppressHydrationWarning
     >
-      <head suppressHydrationWarning>
-        <script
-          suppressHydrationWarning
-          dangerouslySetInnerHTML={{
-            __html: `
-              (function() {
-                const removeBis = (node) => {
-                  if (node && node.nodeType === 1) {
-                    if (node.hasAttribute('bis_skin_checked')) {
-                      node.removeAttribute('bis_skin_checked');
-                    }
-                    node.querySelectorAll('[bis_skin_checked]').forEach(el => el.removeAttribute('bis_skin_checked'));
-                  }
-                };
-                const observer = new MutationObserver((mutations) => {
-                  mutations.forEach((mutation) => {
-                    if (mutation.type === 'attributes' && mutation.attributeName === 'bis_skin_checked') {
-                      mutation.target.removeAttribute('bis_skin_checked');
-                    }
-                    if (mutation.addedNodes) {
-                      mutation.addedNodes.forEach(removeBis);
-                    }
-                  });
-                });
-                if (typeof document !== 'undefined' && document.documentElement) {
-                  removeBis(document.documentElement);
-                  observer.observe(document.documentElement, {
-                    attributes: true,
-                    childList: true,
-                    subtree: true,
-                    attributeFilter: ['bis_skin_checked']
-                  });
-                }
-              })();
-            `,
-          }}
-        />
-      </head>
+      <head suppressHydrationWarning />
       <body suppressHydrationWarning>
         <header className="site-header">
           <div className="site-header__inner">
@@ -128,6 +91,7 @@ export default function RootLayout({
           </div>
         </header>
 
+        <BisCleanup />
         <main>{children}</main>
 
         <footer className="site-footer">
