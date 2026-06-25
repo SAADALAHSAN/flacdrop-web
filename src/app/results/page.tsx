@@ -6,8 +6,10 @@ import SearchBar from '@/components/SearchBar';
 import SongCard from '@/components/SongCard';
 import AlbumCard from '@/components/AlbumCard';
 import AlbumModal from '@/components/AlbumModal';
-
-type DownloadState = 'idle' | 'queued' | 'downloading' | 'complete' | 'error';
+import { navigateToSearch } from '@/lib/navigation';
+import { API_BASE } from '@/lib/api';
+import { downloadTrack } from '@/lib/download';
+import type { DownloadState } from '@/lib/types';
 
 function SongCardSkeleton() {
   return (
@@ -65,11 +67,8 @@ function ResultsContent() {
   const [downloadProgress, setDownloadProgress] = useState<Record<string, number>>({});
   const [downloadEtas, setDownloadEtas] = useState<Record<string, string>>({});
 
-  const handleSearch = ({ query: q, isYouTube }: { query: string; isYouTube: boolean }) => {
-    const params = new URLSearchParams();
-    params.set('q', q);
-    if (isYouTube) params.set('yt', '1');
-    router.push(`/results?${params.toString()}`);
+  const handleSearch = (result: { query: string; isYouTube: boolean }) => {
+    navigateToSearch(router, result);
   };
 
   const fetchResults = useCallback(async (searchQuery: string, searchIsYt: boolean) => {
@@ -84,7 +83,6 @@ function ResultsContent() {
     setError(null);
     setYoutubeDetected(null);
 
-    const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
     const endpoint = searchIsYt 
       ? `${API_BASE}/api/resolve-yt?url=${encodeURIComponent(searchQuery)}`
       : `${API_BASE}/api/search?q=${encodeURIComponent(searchQuery)}`;
@@ -122,161 +120,11 @@ function ResultsContent() {
   };
 
   const handleDownload = useCallback(async (trackId: string, trackTitle: string, trackArtist: string) => {
-    const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-    
-    // Idle → Queued
-    setDownloadStates(prev => ({ ...prev, [trackId]: 'queued' }));
-    setDownloadProgress(prev => ({ ...prev, [trackId]: 0 }));
-    setDownloadEtas(prev => ({ ...prev, [trackId]: '' }));
-
-    // Start server-side preparation progress simulation with asymptotic slowdown (0-98%)
-    let prepProgress = 0;
-    let prepTimeoutId: NodeJS.Timeout | null = null;
-    
-    const runPrepAnimation = () => {
-      let delay = 120;
-      let step = 0;
-      
-      if (prepProgress < 50) {
-        step = Math.round(Math.random() * 8 + 6); // Fast growth
-        delay = 120;
-      } else if (prepProgress < 80) {
-        step = Math.round(Math.random() * 4 + 2); // Medium growth
-        delay = 250;
-      } else if (prepProgress < 94) {
-        step = Math.round(Math.random() * 2 + 1); // Slow growth
-        delay = 600;
-      } else if (prepProgress < 98) {
-        step = 1; // Creeping growth
-        delay = 1500;
-      }
-      
-      prepProgress += step;
-      if (prepProgress > 98) {
-        prepProgress = 98; // Cap at 98% to avoid completing prematurely
-      }
-      
-      // Calculate an estimated preparation time remaining based on progress
-      let prepEta = '';
-      if (prepProgress < 40) {
-        prepEta = '~4s left';
-      } else if (prepProgress < 70) {
-        prepEta = '~3s left';
-      } else if (prepProgress < 90) {
-        prepEta = '~2s left';
-      } else if (prepProgress < 95) {
-        prepEta = '~1s left';
-      } else {
-        prepEta = 'almost ready...';
-      }
-
-      setDownloadProgress(prev => ({ ...prev, [trackId]: prepProgress }));
-      setDownloadEtas(prev => ({ ...prev, [trackId]: prepEta }));
-      
-      if (prepProgress < 98) {
-        prepTimeoutId = setTimeout(runPrepAnimation, delay);
-      }
-    };
-
-    runPrepAnimation();
-
-    try {
-      const response = await fetch(`${API_BASE}/api/download/${trackId}`);
-      
-      // Stop preparation interval once response is received
-      if (prepTimeoutId) {
-        clearTimeout(prepTimeoutId);
-      }
-
-      if (!response.ok) {
-        throw new Error(`Server returned ${response.status}`);
-      }
-
-      // Check if response is JSON (like queue full or other backend API issue)
-      const contentType = response.headers.get('content-type') || '';
-      if (contentType.includes('application/json')) {
-        const errData = await response.json();
-        throw new Error(errData.detail || errData.message || 'Download failed');
-      }
-
-      // Read Content-Length
-      const contentLengthHeader = response.headers.get('content-length');
-      const contentLength = contentLengthHeader ? parseInt(contentLengthHeader, 10) : 0;
-
-      // We are officially downloading now
-      setDownloadStates(prev => ({ ...prev, [trackId]: 'downloading' }));
-      setDownloadProgress(prev => ({ ...prev, [trackId]: 0 }));
-      setDownloadEtas(prev => ({ ...prev, [trackId]: '' }));
-
-      const reader = response.body?.getReader();
-      if (!reader) {
-        throw new Error('ReadableStream not supported in this browser.');
-      }
-
-      let receivedLength = 0;
-      const chunks: any[] = [];
-      const downloadStartTime = Date.now();
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        chunks.push(value);
-        receivedLength += value.length;
-
-        if (contentLength > 0) {
-          const progress = Math.round((receivedLength / contentLength) * 100);
-          setDownloadProgress(prev => ({ ...prev, [trackId]: Math.min(progress, 99) }));
-
-          // Calculate Speed & Real-time ETA based on raw stream transfer
-          const elapsedSeconds = (Date.now() - downloadStartTime) / 1000;
-          if (elapsedSeconds > 0.2) {
-            const speedBps = receivedLength / elapsedSeconds;
-            const remainingBytes = contentLength - receivedLength;
-            const remainingSeconds = speedBps > 0 ? Math.round(remainingBytes / speedBps) : 0;
-            
-            let etaText = '';
-            if (remainingSeconds > 60) {
-              const m = Math.floor(remainingSeconds / 60);
-              const s = remainingSeconds % 60;
-              etaText = `${m}m ${s}s left`;
-            } else {
-              etaText = `${remainingSeconds}s left`;
-            }
-            setDownloadEtas(prev => ({ ...prev, [trackId]: etaText }));
-          }
-        }
-      }
-
-      // Completed downloading stream
-      setDownloadProgress(prev => ({ ...prev, [trackId]: 100 }));
-      setDownloadEtas(prev => ({ ...prev, [trackId]: '' }));
-
-      // Assemble file download
-      const blob = new Blob(chunks, { type: 'audio/flac' });
-      const downloadUrl = window.URL.createObjectURL(blob);
-      
-      const safeTitle = trackTitle.replace(/[^a-zA-Z0-9 -_]/g, '').trim();
-      const safeArtist = trackArtist.replace(/[^a-zA-Z0-9 -_]/g, '').trim();
-      const filename = `${safeArtist} - ${safeTitle}.flac`;
-
-      const link = document.createElement('a');
-      link.href = downloadUrl;
-      link.download = filename;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      window.URL.revokeObjectURL(downloadUrl);
-
-      setDownloadStates(prev => ({ ...prev, [trackId]: 'complete' }));
-    } catch (err: any) {
-      if (prepTimeoutId) {
-        clearTimeout(prepTimeoutId);
-      }
-      console.error('Download error:', err);
-      setDownloadStates(prev => ({ ...prev, [trackId]: 'error' }));
-      setDownloadEtas(prev => ({ ...prev, [trackId]: 'failed' }));
-    }
+    await downloadTrack(trackId, trackTitle, trackArtist, {
+      setDownloadStates,
+      setDownloadProgress,
+      setDownloadEtas,
+    });
   }, []);
 
   return (
