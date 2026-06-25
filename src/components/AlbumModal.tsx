@@ -445,7 +445,6 @@ export default function AlbumModal({ albumId, isOpen, onClose }: AlbumModalProps
         const data = await res.json();
         setAlbum(data);
       } catch (err: any) {
-        console.error(err);
         setError(err.message || 'Could not connect to server.');
       } finally {
         setLoading(false);
@@ -584,7 +583,6 @@ export default function AlbumModal({ albumId, isOpen, onClose }: AlbumModalProps
       return true;
     } catch (err: any) {
       if (prepTimeoutId) clearTimeout(prepTimeoutId);
-      console.error('Download error:', err);
       setDownloadStates(prev => ({ ...prev, [trackId]: 'error' }));
       setDownloadEtas(prev => ({ ...prev, [trackId]: 'failed' }));
       return false;
@@ -617,7 +615,7 @@ export default function AlbumModal({ albumId, isOpen, onClose }: AlbumModalProps
         completedCount++;
       } else {
         // If one fails, we continue but warn
-        console.warn(`Album download: Track ${track.title} failed.`);
+
       }
     }
 
