@@ -15,6 +15,7 @@ interface SongCardProps {
   downloadState?: DownloadState;
   downloadProgress?: number;
   downloadEta?: string;
+  errorMessage?: string;
   onDownload: (trackId: string) => void;
 }
 
@@ -163,6 +164,7 @@ export default function SongCard({
   downloadState = 'idle',
   downloadProgress = 0,
   downloadEta = '',
+  errorMessage,
   onDownload,
 }: SongCardProps) {
   const [hovered, setHovered] = useState(false);
@@ -280,13 +282,28 @@ export default function SongCard({
           </span>
         )}
         {downloadState === 'error' && (
-          <button
-            type="button"
-            onClick={() => onDownload(trackId)}
-            style={{ ...styles.downloadBtn, borderColor: 'var(--danger, #FF4757)', color: 'var(--danger, #FF4757)' }}
-          >
-            ✗ Failed — Retry
-          </button>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '4px' }}>
+            <button
+              type="button"
+              onClick={() => onDownload(trackId)}
+              style={{ ...styles.downloadBtn, borderColor: 'var(--danger, #FF4757)', color: 'var(--danger, #FF4757)' }}
+            >
+              ✗ Failed — Retry
+            </button>
+            {errorMessage && (
+              <span style={{
+                fontFamily: "'IBM Plex Mono', monospace",
+                fontSize: '11px',
+                color: 'var(--danger, #FF4757)',
+                maxWidth: '200px',
+                textAlign: 'right',
+                lineHeight: 1.3,
+                opacity: 0.8,
+              }}>
+                {errorMessage}
+              </span>
+            )}
+          </div>
         )}
       </div>
     </article>
